@@ -18,23 +18,75 @@ jobs:
           distribution: 'temurin'
           java-version: '8'
 
-      - name: Compile and Package MIDlet
+      - name: Generate Stubs and Compile MIDlet
         run: |
-          mkdir -p build/classes build/jar
-          
-          # Download CLDC/MIDP API stubs for compilation
-          wget -O cldc_midp.jar https://github.com/nikita-volkov/j2me-stubs/raw/master/cldc_midp.jar || \
-          curl -L -o cldc_midp.jar https://raw.githubusercontent.com/woody2/j2me-stubs/master/cldc_midp.jar || true
-          
-          # Fallback check if stubs need manual generation or standard javac with bootclasspath
+          mkdir -p stubs_src/javax/microedition/midlet stubs_src/javax/microedition/lcdui build/classes build/jar
+
+          # 1. Create local CLDC/MIDP API stub source files
+          cat << 'EOF' > stubs_src/javax/microedition/midlet/MIDlet.java
+          package javax.microedition.midlet;
+          public abstract class MIDlet {
+              public MIDlet() {}
+              protected abstract void startApp();
+              protected abstract void pauseApp();
+              protected abstract void destroyApp(boolean unconditional);
+              public final void notifyDestroyed() {}
+          }
+          EOF
+
+          cat << 'EOF' > stubs_src/javax/microedition/lcdui/Displayable.java
+          package javax.microedition.lcdui;
+          public class Displayable {}
+          EOF
+
+          cat << 'EOF' > stubs_src/javax/microedition/lcdui/Command.java
+          package javax.microedition.lcdui;
+          public class Command {
+              public static final int SCREEN = 1;
+              public static final int EXIT = 2;
+              public Command(String label, int commandType, int priority) {}
+          }
+          EOF
+
+          cat << 'EOF' > stubs_src/javax/microedition/lcdui/CommandListener.java
+          package javax.microedition.lcdui;
+          public interface CommandListener {
+              void commandAction(Command c, Displayable d);
+          }
+          EOF
+
+          cat << 'EOF' > stubs_src/javax/microedition/lcdui/Form.java
+          package javax.microedition.lcdui;
+          public class Form extends Displayable {
+              public Form(String title) {}
+              public void append(String text) {}
+              public void addCommand(Command cmd) {}
+              public void setCommandListener(CommandListener l) {}
+          }
+          EOF
+
+          cat << 'EOF' > stubs_src/javax/microedition/lcdui/Display.java
+          package javax.microedition.lcdui;
+          import javax.microedition.midlet.MIDlet;
+          public class Display {
+              public static Display getDisplay(MIDlet m) { return null; }
+              public void setCurrent(Displayable d) {}
+          }
+          EOF
+
+          # 2. Compile the API stubs into a local jar
+          javac -source 1.3 -target 1.3 -d stubs_src $(find stubs_src -name "*.java")
+          jar cf cldc_midp.jar -C stubs_src javax
+
+          # 3. Compile your MIDlet using the local stubs
           javac -source 1.3 -target 1.3 -bootclasspath cldc_midp.jar -d build/classes src/LagApp.java
-          
-          # Create JAR package
+
+          # 4. Create final JAR package
           cd build/classes
           jar cfm ../jar/LagApp.jar ../../src/META-INF/MANIFEST.MF .
           cd ../..
-          
-          # Calculate JAR size and update JAD file
+
+          # 5. Calculate JAR size and update JAD file
           JAR_SIZE=$(wc -c < build/jar/LagApp.jar)
           cp LagApp.jad build/jar/LagApp.jad
           echo "MIDlet-Jar-Size: $JAR_SIZE" >> build/jar/LagApp.jad
