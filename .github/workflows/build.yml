@@ -74,11 +74,11 @@ jobs:
           }
           EOF
 
-          # 2. Compile the API stubs into a local jar
-          javac -source 1.3 -target 1.3 -d stubs_src $(find stubs_src -name "*.java")
+          # 2. Compile API stubs using the standard JDK compiler (so java.lang is found)
+          javac -d stubs_src $(find stubs_src -name "*.java")
           jar cf cldc_midp.jar -C stubs_src javax
 
-          # 3. Compile your MIDlet using the local stubs
+          # 3. Compile your MIDlet targeting Java 1.3 using the stubs as bootclasspath
           javac -source 1.3 -target 1.3 -bootclasspath cldc_midp.jar -d build/classes src/LagApp.java
 
           # 4. Create final JAR package
